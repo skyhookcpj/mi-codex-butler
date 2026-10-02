@@ -1,0 +1,17 @@
+# 管家 Server 的 systemd 用户服务。scripts/install-butler-service.sh 会把 @ROOT@ 换成仓库路径，装到 ~/.config/systemd/user/。
+[Unit]
+Description=管家 Server（音箱 WS :4399 + 配置页 :8787）
+
+[Service]
+Type=simple
+ExecStart=@ROOT@/scripts/run-butler.sh
+Restart=always
+RestartSec=3
+StandardOutput=append:%h/.mihome/butler.log
+StandardError=inherit
+# 停服务时连同正在跑的 Codex 一起收掉（Codex 自成进程组，但仍在同一个 cgroup）
+KillMode=control-group
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target

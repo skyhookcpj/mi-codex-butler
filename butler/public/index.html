@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>家里管家</title>
+  <style>
+    :root {
+      --bg: #14110e;
+      --panel: #1e1a16;
+      --field: #12100e;
+      --line: #3a332c;
+      --ink: #f3ece3;
+      --muted: #b7aa9c;
+      --accent: #d9773a;
+      --ok: #7cb07a;
+      --warn: #d8b25a;
+      --bad: #d46a5c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 15px/1.5 ui-sans-serif, system-ui, "PingFang SC", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    main { max-width: 760px; margin: 0 auto; padding: 28px 16px 48px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+    h1 { font-size: 22px; font-weight: 650; margin: 0; }
+    .sub { color: var(--muted); font-size: 13px; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 14px;
+    }
+    h2 { font-size: 13px; letter-spacing: .08em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+    h3 { font-size: 13px; color: var(--muted); margin: 16px 0 2px; font-weight: 600; }
+    h3:first-of-type { margin-top: 0; }
+    label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+    input, select {
+      width: 100%;
+      background: var(--field);
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+    }
+    input:focus, select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+    .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 12px; }
+    @media (max-width: 560px) { .row, .row3 { grid-template-columns: 1fr; } }
+    button {
+      background: var(--accent);
+      color: #1a120c;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font: 600 14px/1 inherit;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button:disabled { opacity: .4; cursor: default; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); display: inline-block; margin-right: 6px; vertical-align: 1px; }
+    .dot.on { background: var(--ok); }
+    .dot.busy { background: var(--warn); }
+
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    @media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
+    .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .card .k { font-size: 12px; color: var(--muted); }
+    .card .v { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+    .card .m { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+    .card button { align-self: flex-start; margin-top: auto; padding: 6px 10px; font-size: 13px; }
+
+    .inline { display: flex; gap: 8px; align-items: center; }
+    .inline input { flex: 1; min-width: 0; }
+    .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+    .check input { width: auto; }
+    .result { font-size: 13px; min-height: 1.4em; margin-top: 8px; color: var(--muted); overflow-wrap: anywhere; }
+    .result b { color: var(--ink); font-weight: 600; }
+
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+    .tag { background: #2a241e; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; display: flex; align-items: center; gap: 6px; }
+    .tag button { background: none; color: var(--muted); padding: 0; font-weight: 400; }
+
+    .hist { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow: auto; }
+    .hist li { border-top: 1px solid var(--line); padding: 9px 0; display: grid; grid-template-columns: 52px 1fr; gap: 2px 10px; }
+    .hist li:first-child { border-top: 0; }
+    .hist .t { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; padding-top: 2px; }
+    .hist .q { overflow-wrap: anywhere; }
+    .hist .a { grid-column: 2; color: var(--muted); overflow-wrap: anywhere; }
+    .hist .meta { grid-column: 2; font-size: 12px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
+    .pill { font-size: 11px; border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; }
+    .pill.reply { color: var(--ok); border-color: #3d5a3c; }
+    .pill.error, .pill.timeout { color: var(--bad); border-color: #6a3a33; }
+    .pill.busy, .pill.cancelled { color: var(--warn); border-color: #5f4f2a; }
+    .empty { color: var(--muted); font-size: 13px; }
+
+    pre {
+      background: #0f0d0b;
+      border-radius: 8px;
+      padding: 10px;
+      height: 240px;
+      overflow: auto;
+      font: 12px/1.45 ui-monospace, Menlo, monospace;
+      color: #d8cfc4;
+      margin: 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    pre .warn { color: var(--warn); }
+    pre .error { color: var(--bad); }
+    .hint { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+    .savebar { display: flex; gap: 10px; align-items: center; margin-top: 16px; }
+    .toast { font-size: 13px; color: var(--ok); }
+    .toast.bad { color: var(--bad); }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>家里管家</h1>
+      <span class="sub" id="sseState">连接中…</span>
+    </header>
+
+    <section>
+      <h2>状态</h2>
+      <div class="cards">
+        <div class="card">
+          <div class="k">音箱</div>
+          <div class="v"><span class="dot" id="spkDot"></span><span id="spkState">未连接</span></div>
+          <div class="m" id="spkMeta">—</div>
+        </div>
+        <div class="card">
+          <div class="k">当前会话</div>
+          <div class="v" id="sesState">无</div>
+          <div class="m" id="sesMeta">下一句会新开</div>
+          <button type="button" class="ghost" id="resetSession">新开一轮</button>
+        </div>
+        <div class="card">
+          <div class="k">正在办</div>
+          <div class="v" id="taskState">空闲</div>
+          <div class="m" id="taskMeta">—</div>
+          <button type="button" class="ghost" id="cancelTask" disabled>停止</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>调试</h2>
+      <label for="simText">模拟一句（等于音箱听到这句话）</label>
+      <div class="inline">
+        <input id="simText" placeholder="客厅现在怎样" />
+        <button type="button" id="simulate">发送</button>
+      </div>
+      <label class="check"><input type="checkbox" id="simSpeak" /> 回复也让音箱念出来</label>
+      <div class="result" id="simResult"></div>
+
+      <label for="sayText">让音箱念</label>
+      <div class="inline">
+        <input id="sayText" placeholder="测试一下" />
+        <button type="button" class="ghost" id="say">念</button>
+      </div>
+      <div class="result" id="sayResult"></div>
+    </section>
+
+    <section>
+      <h2>最近对话</h2>
+      <ul class="hist" id="history"></ul>
+    </section>
+
+    <section>
+      <h2>配置</h2>
+
+      <h3>对话</h3>
+      <label>新会话关键词</label>
+      <div class="tags" id="tags"></div>
+      <div class="inline">
+        <input id="kw" placeholder="加一个词，回车" />
+        <button type="button" class="ghost" id="addKw">添加</button>
+      </div>
+      <div class="row">
+        <div>
+          <label for="sessionIdleMinutes">会话空闲超时（分钟）</label>
+          <input id="sessionIdleMinutes" type="number" min="1" />
+        </div>
+        <div>
+          <label for="codexTimeoutSec">Codex 超时（秒）</label>
+          <input id="codexTimeoutSec" type="number" min="10" />
+        </div>
+      </div>
+
+      <h3>话术</h3>
+      <div class="row">
+        <div><label for="ph_wake">唤醒应答</label><input id="ph_wake" /></div>
+        <div><label for="ph_ack">受理语（空 = 不念）</label><input id="ph_ack" placeholder="不念" /></div>
+        <div><label for="ph_newSession">新开一轮</label><input id="ph_newSession" /></div>
+        <div><label for="ph_busy">忙碌</label><input id="ph_busy" /></div>
+        <div><label for="ph_error">出错</label><input id="ph_error" /></div>
+        <div><label for="ph_timeout">超时</label><input id="ph_timeout" /></div>
+        <div><label for="ph_notHeard">没听清（空 = 静默）</label><input id="ph_notHeard" placeholder="静默" /></div>
+      </div>
+
+      <h3>音箱端</h3>
+      <div class="row3">
+        <div><label for="sp_listen">唤醒后等说话（秒）</label><input id="sp_listen" type="number" min="3" /></div>
+        <div><label for="sp_delay">打断后等多久再念（毫秒）</label><input id="sp_delay" type="number" min="0" step="100" /></div>
+        <div>
+          <label for="sp_abortOn">打断时机</label>
+          <select id="sp_abortOn">
+            <option value="final">最终识别（稳）</option>
+            <option value="stop">识别停止（快）</option>
+          </select>
+        </div>
+      </div>
+      <p class="hint">话术和音箱端参数在音箱连上、以及每次保存时下发。</p>
+
+      <h3>Codex</h3>
+      <label for="cx_workspace">工作目录</label>
+      <input id="cx_workspace" />
+      <div class="row">
+        <div><label for="cx_bin">可执行文件</label><input id="cx_bin" /></div>
+        <div><label for="cx_model">模型（空 = 跟 config.toml）</label><input id="cx_model" placeholder="跟 config.toml" /></div>
+      </div>
+      <p class="hint" id="ports"></p>
+
+      <div class="savebar">
+        <button type="button" id="save">保存</button>
+        <span class="toast" id="toast"></span>
+      </div>
+    </section>
+
+    <section>
+      <h2>日志</h2>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const KIND = { reply: "回复", new_session: "新开一轮", busy: "忙碌", error: "出错", timeout: "超时", cancelled: "已停止" };
+    let keywords = [];
+    let state = null;
+    let skew = 0; // 服务器时间 - 本机时间
+
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const hhmm = (ts) => new Date(ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const now = () => Date.now() + skew;
+    function ago(ms) {
+      const s = Math.max(0, Math.round(ms / 1000));
+      if (s < 60) return `${s} 秒`;
+      const m = Math.floor(s / 60);
+      if (m < 60) return `${m} 分 ${s % 60} 秒`;
+      return `${Math.floor(m / 60)} 小时 ${m % 60} 分`;
+    }
+    async function api(method, path, body) {
+      const res = await fetch(path, {
+        method,
+        headers: body ? { "Content-Type": "application/json" } : {},
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      return data;
+    }
+
+    // ── 状态 ─────────────────────────────
+    function renderState() {
+      if (!state) return;
+      const sp = state.speaker;
+      $("spkDot").className = "dot" + (sp.connected ? " on" : "");
+      $("spkState").textContent = sp.connected ? "已连接" : "未连接";
+      $("spkMeta").textContent = sp.connected
+        ? `${sp.addr || ""} · 连上 ${ago(now() - sp.since)}${sp.version ? ` · ${sp.version}` : ""}`
+        : sp.since ? `${sp.addr || ""} 断开 ${ago(now() - sp.since)}` : "还没连过";
+
+      const ses = state.session;
+      if (ses.id) {
+        $("sesState").textContent = `${ses.id.slice(0, 8)} · 第 ${ses.rounds} 轮`;
+        const left = ses.expiresAt - now();
+        $("sesMeta").textContent = left > 0 ? `${ago(left)}后空闲过期` : "已过期，下一句会新开";
+      } else {
+        $("sesState").textContent = "无";
+        $("sesMeta").textContent = "下一句会新开";
+      }
+      $("resetSession").disabled = !ses.id;
+
+      const task = state.task;
+      $("taskState").innerHTML = task ? `<span class="dot busy"></span>${esc(task.text)}` : "空闲";
+      $("taskMeta").textContent = task ? `${task.source === "web" ? "页面模拟" : "音箱"} · 已经 ${ago(now() - task.startedAt)}` : "—";
+      $("cancelTask").disabled = !task;
+    }
+    setInterval(renderState, 1000);
+
+    $("resetSession").onclick = () => api("POST", "/api/session/reset").catch((e) => alert(e.message));
+    $("cancelTask").onclick = () => api("POST", "/api/task/cancel").catch((e) => alert(e.message));
+
+    // ── 调试 ─────────────────────────────
+    async function simulate() {
+      const text = $("simText").value.trim();
+      if (!text) return;
+      $("simulate").disabled = true;
+      $("simResult").textContent = "办理中…";
+      try {
+        const r = await api("POST", "/api/simulate", { text, speak: $("simSpeak").checked });
+        $("simResult").innerHTML = `<span class="pill ${esc(r.kind)}">${esc(KIND[r.kind] || r.kind)}</span> <b>${esc(r.text || "（不念）")}</b>${r.spoken ? " · 已让音箱念" : ""}`;
+        $("simText").value = "";
+      } catch (e) {
+        $("simResult").textContent = e.message;
+      } finally {
+        $("simulate").disabled = false;
+      }
+    }
+    $("simulate").onclick = simulate;
+    $("simText").onkeydown = (e) => { if (e.key === "Enter" && !e.isComposing) simulate(); };
+
+    async function say() {
+      const text = $("sayText").value.trim();
+      if (!text) return;
+      try {
+        await api("POST", "/api/say", { text });
+        $("sayResult").textContent = "已发给音箱";
+      } catch (e) {
+        $("sayResult").textContent = e.message;
+      }
+    }
+    $("say").onclick = say;
+    $("sayText").onkeydown = (e) => { if (e.key === "Enter" && !e.isComposing) say(); };
+
+    // ── 最近对话 ─────────────────────────
+    let history = [];
+    function renderHistory() {
+      if (!history.length) {
+        $("history").innerHTML = `<li><span></span><span class="empty">还没有对话</span></li>`;
+        return;
+      }
+      $("history").innerHTML = history.map((h) => `
+        <li>
+          <span class="t">${hhmm(h.ts)}</span>
+          <span class="q">${esc(h.text)}</span>
+          <span class="a">${esc(h.reply || "（不念）")}</span>
+          <span class="meta">
+            <span class="pill ${esc(h.kind)}">${esc(KIND[h.kind] || h.kind)}</span>
+            <span>${h.source === "web" ? "页面" : "音箱"}</span>
+            <span>${(h.durationMs / 1000).toFixed(1)}s</span>
+            ${h.sessionId ? `<span>${esc(h.sessionId.slice(0, 8))}</span>` : ""}
+            ${h.error ? `<span title="${esc(h.error)}">${esc(h.error.slice(0, 60))}</span>` : ""}
+          </span>
+        </li>`).join("");
+    }
+
+    // ── 配置 ─────────────────────────────
+    function renderTags() {
+      $("tags").innerHTML = keywords.map((k, i) => `<span class="tag">${esc(k)}<button type="button" data-i="${i}" aria-label="删除">×</button></span>`).join("");
+      $("tags").querySelectorAll("button").forEach((b) => {
+        b.onclick = () => { keywords.splice(Number(b.dataset.i), 1); renderTags(); };
+      });
+    }
+    function addKw() {
+      const v = $("kw").value.trim();
+      if (v && !keywords.includes(v)) keywords.push(v);
+      $("kw").value = "";
+      renderTags();
+    }
+    $("addKw").onclick = addKw;
+    $("kw").onkeydown = (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); addKw(); } };
+
+    const PHRASES = ["wake", "ack", "newSession", "busy", "error", "timeout", "notHeard"];
+    function fill(cfg) {
+      keywords = [...cfg.newSessionKeywords];
+      renderTags();
+      $("sessionIdleMinutes").value = cfg.sessionIdleMinutes;
+      $("codexTimeoutSec").value = cfg.codex.timeoutSec;
+      for (const k of PHRASES) $(`ph_${k}`).value = cfg.phrases[k] ?? "";
+      $("sp_listen").value = cfg.speaker.listenTimeoutSec;
+      $("sp_delay").value = cfg.speaker.ttsDelayAfterAbortMs;
+      $("sp_abortOn").value = cfg.speaker.abortOn;
+      $("cx_workspace").value = cfg.codex.workspace;
+      $("cx_bin").value = cfg.codex.bin;
+      $("cx_model").value = cfg.codex.model;
+      $("ports").textContent = `音箱连 ws://<NAS>:${cfg.wsPort}，配置页 :${cfg.webPort}。端口改配置文件或环境变量后重启生效。`;
+    }
+    function payload() {
+      const phrases = {};
+      for (const k of PHRASES) phrases[k] = $(`ph_${k}`).value;
+      return {
+        newSessionKeywords: keywords,
+        sessionIdleMinutes: Number($("sessionIdleMinutes").value),
+        phrases,
+        speaker: {
+          listenTimeoutSec: Number($("sp_listen").value),
+          ttsDelayAfterAbortMs: Number($("sp_delay").value),
+          abortOn: $("sp_abortOn").value,
+        },
+        codex: {
+          workspace: $("cx_workspace").value,
+          bin: $("cx_bin").value,
+          model: $("cx_model").value,
+          timeoutSec: Number($("codexTimeoutSec").value),
+        },
+      };
+    }
+    $("save").onclick = async () => {
+      const toast = $("toast");
+      try {
+        const r = await api("PUT", "/api/config", payload());
+        fill(r.config);
+        toast.className = "toast";
+        toast.textContent = r.pushed ? "已保存，已下发音箱" : "已保存（音箱不在线，连上时下发）";
+      } catch (e) {
+        toast.className = "toast bad";
+        toast.textContent = e.message;
+      }
+      setTimeout(() => (toast.textContent = ""), 4000);
+    };
+
+    // ── 推送 ─────────────────────────────
+    const logEl = $("log");
+    function appendLog(e) {
+      const stick = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 8;
+      const line = document.createElement("div");
+      if (e.level !== "info") line.className = e.level;
+      line.textContent = `${new Date(e.ts).toLocaleTimeString("zh-CN", { hour12: false })} ${e.message}`;
+      logEl.appendChild(line);
+      while (logEl.childNodes.length > 500) logEl.removeChild(logEl.firstChild);
+      if (stick) logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function connect() {
+      const es = new EventSource("/api/stream");
+      es.onopen = () => {
+        $("sseState").textContent = "已连上 NAS";
+        logEl.textContent = "";
+        api("GET", "/api/history").then((h) => { history = h; renderHistory(); });
+      };
+      es.onerror = () => { $("sseState").textContent = "和 NAS 断开，重连中…"; };
+      es.addEventListener("state", (ev) => {
+        state = JSON.parse(ev.data);
+        skew = state.now - Date.now();
+        renderState();
+      });
+      es.addEventListener("log", (ev) => appendLog(JSON.parse(ev.data)));
+      es.addEventListener("history", (ev) => {
+        history.unshift(JSON.parse(ev.data));
+        history = history.slice(0, 50);
+        renderHistory();
+      });
+    }
+
+    api("GET", "/api/config").then(fill);
+    connect();
+  </script>
+</body>
+</html>

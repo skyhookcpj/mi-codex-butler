@@ -1,0 +1,9 @@
+{
+  "mcp_key": "在滴滴开放平台 MCP 页面申请的 Key",
+  "env": "sandbox",
+  "home": { "name": "家（小区名 + 哪个门）", "lng": 116.4, "lat": 39.9 },
+  "office": { "name": "公司（大楼名）", "lng": 116.45, "lat": 39.92 },
+  "product": "快车",
+  "daily_limit": 2,
+  "estimate_ttl_sec": 180
+}
