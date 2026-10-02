@@ -55,7 +55,9 @@ NAS：butler Server 调 codex exec（同一轮对话 resume 同一个 session）
 
 ## 需要准备
 
-- **音箱**：Open-XiaoAI 支持刷机的型号。作者用的是 Xiaomi 智能音箱 Pro（OH2P）；小爱音箱 Pro（LX06）理论上可用，没测过。刷机见 [Open-XiaoAI](https://github.com/idootop/open-xiaoai)。
+- **音箱**：Open-XiaoAI 支持刷机的型号，能刷哪些固件版本以 [Open-XiaoAI](https://github.com/idootop/open-xiaoai) 的说明为准。
+  - **已验证：Xiaomi 智能音箱 Pro（OH2P），固件 1.62.2。**
+  - 其他型号和固件没测过。butler-client 依赖原厂的识别日志、唤醒和播报命令，这些不是公开接口，换型号或固件可能对不上，表现是喊「你好管家」没反应。详见 [speaker/README.md](speaker/README.md)。
 - **一台常开的 Linux 主机**（NAS、迷你主机、树莓派都行，下文统称 NAS），和音箱在同一个局域网：Python 3.11+、[uv](https://docs.astral.sh/uv/)、Node 20+、[Codex CLI](https://github.com/openai/codex)，以及 Codex 能用的模型（OpenAI，或者任何兼容的服务商）。
 - **米家账号**，设备已经接入米家。
 - 可选：飞书（`go-to-work` 查日程用）、滴滴开放平台 MCP Key（`taxi` 叫车用）。

@@ -57,6 +57,11 @@ cargo zigbuild --release --target armv7-unknown-linux-gnueabihf.2.25
 
 前提：音箱已按 [Open-XiaoAI](https://github.com/idootop/open-xiaoai) 的说明刷好补丁，能 `ssh root@<音箱IP>` 登录；NAS 上的 Server 已经跑起来。
 
+**验证范围**：只在 Xiaomi 智能音箱 Pro（OH2P）固件 1.62.2 上验证过。
+
+- `butler-client` 是 armv7 hard-float 程序，按 glibc 2.25 编译，系统 glibc 不低于 2.25 就能启动。
+- 它依赖的原厂行为（`instruction.log` 里的 `RecognizeResult`、`pnshelper` 静默唤醒、`mico_aivs_lab` / `pns` 重启、`wakeup.sh`、`tts_play.sh`）随型号和固件可能不同。读不懂的日志行会被跳过，不会崩溃，表现是唤醒后没反应。这时要改的是 `client/src/device.rs`、`logs.rs`，换个编译版本解决不了。
+
 1. **KWS**：下载 `kws.tar.gz`（地址和校验值见 [kws/README.md](kws/README.md)），把里面的 `kws` 程序和 `models/` 放到音箱 `/data/open-xiaoai/kws/`，再放上本目录的 `kws/run.sh`、`kws/keywords.txt`。
 2. **client**：从 GitHub Releases 下载 `butler-client`，或者按上面的命令自己编译。
 3. **拷到音箱**。音箱上没有 sftp-server，新版 OpenSSH 的 `scp` 要加 `-O` 走旧协议；音箱只认 ssh-rsa 主机密钥，再加两个 `-o`：
