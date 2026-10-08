@@ -12,7 +12,7 @@
  「你好管家」 ──麦克风──► KWS（sherpa-onnx，只写 /tmp/open-xiaoai/kws.log）          │
                     │      │                                                          │
                     │      ▼                                                          │
-                    │  butler-client（Rust）── 念「在呢」/ 静默叫醒 / 打断 / 念回复     │
+                    │  butler-client（Rust）── 念「在呢」/ 只识别模式叫醒 / 念回复      │
                     │      │   ▲ 盯 /tmp/mico_aivs_lab/instruction.log 拿识别文字      │
  「客厅灯关了吗」 ─────────────► 原厂接待 mico_aivs_lab + 小米云 ASR                    │
                     └──────┼───────────────────────────────────────────────────────────┘
@@ -30,7 +30,7 @@
 ```
 
 分工的原则：**快的、跟原厂打交道的放音箱本地；慢的、要上下文的放 NAS。**
-欢迎语、叫醒、打断都是音箱上的本地命令，绕 NAS 只会多延迟；NAS 负责把多轮对话挂进同一个 Codex session。
+欢迎语、叫醒、切换只识别模式都是音箱上的本地命令，绕 NAS 只会多延迟；NAS 负责把多轮对话挂进同一个 Codex session。
 
 ---
 
@@ -79,12 +79,13 @@
 | `speaker.ts` | `SpeakerLink`：WS 服务端，同一时刻只认一台音箱（新连接顶掉旧的），15s ping 心跳；连上即下发 `butler_config`、调 `get_version`；可 RPC `run_shell` |
 | `protocol.ts` | 帧编解码和事件名 |
 | `butler.ts` | 调度：新会话关键词 → 忙碌 → 空闲过期 → Codex 新建/续写 → 口语化回复；同一时间只跑一个 Codex。给 Codex 的提示只转交原话（「用户对着音箱说：…」），音箱在哪个房间、回复长短等规则都在工作区 `AGENTS.md` |
-| `codex.ts` | 拼 `codex exec` / `exec resume` 参数，逐行吃 `--json` 的 JSONL；**拿到 `turn.completed` 立刻返回**，1.5s 后按进程组结束 codex |
+| `codex.ts` | 拼 `codex exec` / `exec resume` 参数，逐行吃 `--json` 的 JSONL；**拿到 `turn.completed` 立刻返回**，1.5s 后按进程组结束 codex。命令的开始 / 结束和中间的话实时回调出去（`onStep`），给演示页用 |
 | `store.ts` | session 落盘 `~/.mihome/butler-session.json`；最近对话 `butler-history.jsonl`（保留 200 条） |
 | `text.ts` | 新会话关键词匹配（「新对话，打开客厅灯」= 新开一轮再执行后半句）；`toSpeech` 去 markdown、截到句末 |
 | `config.ts` | `~/.mihome/butler.json`；端口只认文件 / 环境变量，页面改不了 |
-| `web.ts` | 配置页 API + SSE（log / state / history） |
+| `web.ts` | 配置页 API + SSE（log / state / history / live） |
 | `public/index.html` | 配置页：状态、模拟一句、让音箱念、最近对话、话术与参数、日志 |
+| `public/live.html` | 演示页 `/live`：全屏大字，实时显示每一轮听到什么、Codex 跑的每条命令（开始转圈、结束打勾、耗时）、中间说的话和最后的回复；拍视频、给人演示用 |
 | `scripts/fake-speaker.ts` | 没音箱时假装音箱：`npm run fake-speaker -- ws://NAS:4399` |
 
 ### 2.3 butler-client（`speaker/client/src/`）
@@ -92,7 +93,7 @@
 | 文件 | 作用 |
 | --- | --- |
 | `machine.rs` | **纯逻辑状态机**（输入 → 动作，不碰 IO），在开发机上单测 |
-| `device.rs` | 原厂命令执行：TTS、静默唤醒、打断、轻量重启；重启类操作串行并协调「最早可叫醒时刻」 |
+| `device.rs` | 原厂命令执行：TTS、静默唤醒、开关只识别模式、整套重置；重启类操作串行并协调「最早可叫醒 / 可念时刻」 |
 | `tail.rs` | 轮询 tail：识别截断、替换、「清空后重写得更长」（比对文件开头） |
 | `logs.rs` | 解析 `kws.log` 行、`instruction.log` 的 `RecognizeResult`；坏行跳过不崩 |
 | `settings.rs` | NAS 下发的话术和参数，本地存 `/data/open-xiaoai/butler-config.json` |
@@ -120,14 +121,14 @@ skill 放在工作区级目录，Codex 在 `~/mihome-workspace` 里启动时自�
 | # | 在哪 | 发生什么 | 耗时 |
 | --- | --- | --- | --- |
 | 1 | 音箱 KWS | 识别出唤醒词，写 `kws.log` | 实时 |
-| 2 | client | 同时：念缓存的「在呢」mp3 + 空闲重启接待；重启完 0.3s 后静默唤醒原厂接待 | ≈1s |
-| 3 | 原厂 + 小米云 | 用户说话，云端 ASR，`instruction.log` 出 `is_final` 的 `RecognizeResult` | 说完后 ≈0.3s |
-| 4 | client | **打断**（重启接待 + 重启 pns + `wakeup.sh ready`），同时发 `butler_utterance` | 立刻 |
+| 2 | client | 同时：念缓存的「在呢」mp3 + 以**只识别模式**重启接待；重启完 0.3s 后静默唤醒原厂接待 | ≈1s |
+| 3 | 原厂 + 小米云 | 用户说话，云端**只做 ASR**（不理解、不执行、不播报），`instruction.log` 出 `is_final` 的 `RecognizeResult` | 说完后 ≈0.3s |
+| 4 | client | 发 `butler_utterance`；等接待写出 `Dialog.Finish`（最多 2s），关只识别、重启接待回正常模式 | 立刻 |
 | 5 | Server | 新会话关键词 / 忙碌 / 空闲过期判断；有 session 就 `codex exec resume` | ≈0.1s |
 | 6 | Codex | 模型决定命令（第 1 次调用模型） | 2–7s |
 | 7 | Codex → mihome | 一条 `device control … --verify` | ≈1.2s |
 | 8 | Codex | 模型写口语回复（第 2 次调用模型）；长短按 `AGENTS.md` 的场景原则 | 1–8s |
-| 9 | Server → client | `butler_reply`；打断后不足 2s 的话等够再念 | — |
+| 9 | Server → client | `butler_reply`；接待还在重启的话等它做完再念 | — |
 | 10 | 音箱 | `tts_play.sh` 云端合成并播放 | ≈0.3s |
 
 **延迟的大头是第 6、8 步的云端模型往返**，取决于模型服务商（作者用的是经 ZAI 的 GLM-5.3，排队波动大；换成 flash 版没有更快）。
@@ -146,7 +147,7 @@ skill 放在工作区级目录，Codex 在 `~/mihome-workspace` 里启动时自�
 
 | event | 方向 | data | 说明 |
 | --- | --- | --- | --- |
-| `butler_utterance` | 音箱 → NAS | `{text, dialog_id}` | 打断后的一句最终识别；Event.id 即这句的 id |
+| `butler_utterance` | 音箱 → NAS | `{text, dialog_id}` | 只识别模式下的一句最终识别；Event.id 即这句的 id |
 | `butler_reply` | NAS → 音箱 | `{reply_to, kind, text}` | `kind` ∈ reply / new_session / busy / error / timeout / cancelled；`text` 空 = 不念、只结束等待 |
 | `butler_say` | NAS → 音箱 | `{text}` | 随时念一句（受理语、配置页「让音箱念」），不改状态 |
 | `butler_config` | NAS → 音箱 | 话术 + 超时 + 打断时机 | 连上时、页面保存时下发 |
@@ -161,19 +162,21 @@ RPC（NAS 调音箱）：`get_version`、`run_shell`。
 ### 5.1 音箱端状态机（`machine.rs`）
 
 ```
-待机 ──唤醒词──► 轻量重启接待 + 念「在呢」+ 静默叫醒 ──► 听写（15s）
-听写 ──最终识别有字──► 打断 + 发 NAS ──► 等回复（Codex 超时 + 15s）
+待机 ──唤醒词──► 以只识别模式重启接待 + 念「在呢」+ 静默叫醒 ──► 听写（15s）
+听写 ──最终识别有字──► 发 NAS ──► 等回复（Codex 超时 + 15s）
      ──最终识别为空──► 念「没听清」（默认空 = 静默）──► 待机
-     ──超时──► 一个字都没识别出就整套重置（自愈）──► 待机
-     ──又喊唤醒词──► 整套重置后重新叫醒
+     ──超时──► 整套重置（回正常模式，也是自愈）──► 待机
+     ──又喊唤醒词──► 整套重置后再以只识别模式叫醒
+（出了最终识别后：等 Dialog.Finish，最多 2s，就关只识别、重启接待回正常模式）
 等回复 ──对应 reply──► 念 ──► 待机
        ──超时 / 发送失败──► 念超时语 / 出错语 ──► 待机
        ──唤醒词──► 念忙碌语，继续等
 ```
 
+- **只识别模式**：接待启动时看到 `/data/pns.lab` 就进原厂的实验室测试模式，识别请求带上「不做 NLP、不做 TTS」，云端只回识别结果（`is_nlp_request: false`），不理解、不执行设备指令（2026-10-08 实测）。`/data/pns.lab` 是指向 `/tmp/butler-asr-only` 的软链，开关只在内存盘里建删文件；client 启动、`butler.sh stop`、超时都会回到正常模式，「小爱同学」平时完全照旧。
 - 已经接管过的 `dialog_id` 的残余行不再当成下一句。
 - 迟到的回复：待机时照念，听写中不插嘴。
-- `abort_on`：`final`（默认）等 `is_final`；`stop` 在 `is_stop` 就打断。静默唤醒下原厂不给 `is_stop`，两者实际一样。
+- `abort_on`：`final`（默认）等 `is_final`；`stop` 在 `is_stop` 就交给 NAS。静默唤醒下原厂不给 `is_stop`，两者实际一样。
 
 ### 5.2 Server 规则（`butler.ts`）
 
@@ -193,9 +196,11 @@ Codex 调用的固定参数（`codex.ts`）：工作目录 = 进程 cwd = `~/mih
 
 | 现象 | 对策 |
 | --- | --- |
-| 打断后下一次静默唤醒没反应 | 打断时一并 `/etc/init.d/pns restart` |
-| 回复后顶灯跑马灯不灭 | 打断时补 `/bin/wakeup.sh ready` |
+| 借原厂识别时，小米云端会顺手理解并执行设备指令（抢跑，打断拦不住） | 管家这一轮用只识别模式（`/data/pns.lab`） |
+| 中途打断后下一次静默唤醒没反应 | 整套重置时一并 `/etc/init.d/pns restart`（只识别模式下正常轮次已不需要打断） |
+| 中途打断后顶灯跑马灯不灭 | 整套重置时补 `/bin/wakeup.sh ready` |
 | 同一接待进程第二次静默唤醒识别为空（不发首包音频） | 每次唤醒前空闲重启接待 |
+| 收音中途重启接待后「正在听」灯效（41 号）挂着，`ledd` 空转拖慢 KWS | 每次强行重启后清理挂着的对话灯效 |
 | TTS 文本含引号/反斜杠会坏 JSON、可能注入 | `tts_safe` 清理后作为 argv 传给 `tts_play.sh` |
 | KWS 小模型把「管」听成「缓」等 | `keywords.txt` 补听偏的拼音写法 |
 
@@ -247,6 +252,5 @@ cargo zigbuild --release --target armv7-unknown-linux-gnueabihf.2.25
 - 延迟主要在云端模型；可选：换更快的服务商、或让 Codex 执行完命令立刻 `butler-say`（未做）。
 - 「10 秒后关灯」这类延时任务要等执行完才回话；回合结束会按进程组收掉，后台任务也会被杀。需要另设定时机制（未做）。
 - 多轮问答（「要叫车吗 → 要 → 确认」）每句都要重新喊唤醒词；「追问后自动收音」未做。
-- 每轮管家对话后约 2 秒「小爱同学」听不到（打断重启 pns）。
 - KWS 是 5MB 小模型，偶有误唤醒 / 漏唤醒；调法见 `speaker/kws/README.md`。
 - 只支持 Open-XiaoAI 能刷的型号；OH2 等不在支持列表的音箱接不了。

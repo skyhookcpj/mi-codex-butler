@@ -37,7 +37,7 @@
 
 ```
 「你好管家」→ 音箱上的 KWS 听到唤醒词 → butler-client 念「在呢」，静默叫醒原厂识别
-「把灯关了」→ 原厂把语音识别成文字 → butler-client 打断小爱，把这句话发给 NAS
+「把灯关了」→ 原厂以只识别模式把语音转成文字（小爱不理解、不执行）→ butler-client 把这句话发给 NAS
 NAS：butler Server 调 codex exec（同一轮对话 resume 同一个 session）
      Codex 读工作区的 AGENTS.md 和 skill，执行 mihome 等命令
 回复 → butler-client 让音箱念出来
@@ -101,7 +101,7 @@ sudo loginctl enable-linger $USER     # 一次即可：让用户服务开机自�
 ./scripts/install-butler-service.sh
 ```
 
-打开配置页 `http://<NAS_IP>:8787`，在「模拟一句」里输入「把客厅灯关了」，能看到 Codex 的回复，就说明 Server 这一侧通了。也可以用 `npm run fake-speaker -- ws://<NAS_IP>:4399` 假装一台音箱连上来。
+打开配置页 `http://<NAS_IP>:8787`，在「模拟一句」里输入「把客厅灯关了」，能看到 Codex 的回复，就说明 Server 这一侧通了。演示页 `http://<NAS_IP>:8787/live` 会全屏实时显示 Codex 每一步在做什么，适合投屏或录视频。也可以用 `npm run fake-speaker -- ws://<NAS_IP>:4399` 假装一台音箱连上来。
 
 ### 4. 接上音箱
 
