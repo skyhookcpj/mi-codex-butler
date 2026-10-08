@@ -71,3 +71,46 @@ def test_redacts_plain_and_bearer_forms():
 def test_leaves_ordinary_errors_alone():
     for msg in ['{"code": -704042011, "message": "设备离线"}', "网络超时（HTTP 30s）: TimeoutError", "code=-704042011"]:
         assert redact(msg) == msg
+
+
+def test_redacts_miloco_request_headers():
+    # _miot 出错时打印的请求头字典
+    msg = "{'Authorization': 'BearerV3_abcdefgh12345678', 'X-Client-Secret': 'GiCX+JBHKGmmdhoxuB7773rI', 'Host': 'x'}"
+    out = redact(msg)
+    assert "abcdefgh12345678" not in out
+    assert "GiCX+JBHKGmmdhoxuB7773rI" not in out
+    assert "'Host': 'x'" in out
+
+
+def test_library_errors_stay_off_stderr_by_default(monkeypatch, capsys):
+    import logging
+
+    from mihome import cli
+
+    monkeypatch.delenv("MIHOME_DEBUG", raising=False)
+    root = logging.getLogger()
+    saved = list(root.handlers)
+    try:
+        cli._setup_logging()
+        logging.getLogger("mihome._miot.cloud").error("headers %s", {"Authorization": "BearerV3_secretTOKEN123"})
+        assert "secretTOKEN123" not in capsys.readouterr().err
+    finally:
+        root.handlers[:] = saved
+
+
+def test_debug_logging_is_redacted(monkeypatch, capsys):
+    import logging
+
+    from mihome import cli
+
+    monkeypatch.setenv("MIHOME_DEBUG", "1")
+    root = logging.getLogger()
+    saved, level = list(root.handlers), root.level
+    try:
+        cli._setup_logging()
+        logging.getLogger("mihome._miot.cloud").error("headers %s", {"Authorization": "BearerV3_secretTOKEN123"})
+        err = capsys.readouterr().err
+        assert "headers" in err and "secretTOKEN123" not in err
+    finally:
+        root.handlers[:] = saved
+        root.setLevel(level)

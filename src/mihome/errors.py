@@ -31,7 +31,7 @@ class ValidationError(CliError):
 
 
 # _miot 的 OAuth 异常会把请求体（refresh_token / 授权码）和响应原文拼进 message，输出前一律遮掉。
-_TOKEN_KEYS = r"access_token|refresh_token|service_token|serviceToken|passToken|ssecurity|token"
+_TOKEN_KEYS = r"access_token|refresh_token|service_token|serviceToken|passToken|ssecurity|token|X-Client-Secret|client_secret|secret"
 # 带引号的值：令牌类 + 授权码 code（数字型错误码没有引号，不会误伤）
 _QUOTED_RE = re.compile(
     r"""(?P<key>["']?(?:""" + _TOKEN_KEYS + r"""|code)["']?\s*[:=]\s*["'])(?P<val>[^"'\\\s,}&]{8,})"""
