@@ -20,7 +20,7 @@ mod tail;
 use clock::Clock;
 use device::Device;
 use futures_util::{SinkExt, StreamExt};
-use logs::{parse_instruction, parse_kws, KwsLine};
+use logs::{parse_dialog_finish, parse_instruction, parse_kws, KwsLine};
 use machine::{Action, Input, Machine, State};
 use protocol::{AppMessage, Event, ReplyData, Request, Response, EV_CONFIG, EV_REPLY, EV_SAY, EV_UTTERANCE};
 use serde_json::{json, Value};
@@ -62,6 +62,8 @@ async fn main() {
     let settings = Settings::load(&settings_path);
     let device = Device::new(dry_run, clock, env_path("BUTLER_CACHE", "/tmp/butler-client"));
     log!("butler-client {VERSION} 启动，NAS={server}{}", if dry_run { "（dry run）" } else { "" });
+    // 上次可能停在只识别模式中途退出：先回正常模式，保证「小爱同学」可用
+    device.init_asr_only();
 
     {
         let device = device.clone();
@@ -117,7 +119,7 @@ async fn main() {
         for action in machine.step(input, clock.now()) {
             match action {
                 Action::Abort => device.abort(),
-                Action::RefreshAivs => device.refresh_aivs(),
+                Action::RefreshAivs { asr_only } => device.refresh_aivs(asr_only),
                 Action::SendUtterance { id, text, dialog_id } => {
                     log!("听到：{text}");
                     let ev = Event {
@@ -185,6 +187,8 @@ fn spawn_instruction_watch(path: PathBuf, in_tx: UnboundedSender<Input>) {
             for line in tail.poll() {
                 if let Some(r) = parse_instruction(&line) {
                     let _ = in_tx.send(Input::Recognize(r));
+                } else if let Some(dialog) = parse_dialog_finish(&line) {
+                    let _ = in_tx.send(Input::DialogFinish(dialog));
                 }
             }
             tokio::time::sleep(POLL).await;

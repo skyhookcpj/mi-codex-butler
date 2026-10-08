@@ -33,6 +33,11 @@ stop() {
     start-stop-daemon -K -q -p /tmp/butler-client.pid
     rm -f /tmp/butler-kws.pid /tmp/butler-client.pid
     killall kws butler-client 2>/dev/null
+    # client 可能停在「只识别」模式中途（见 client/src/device.rs）：关掉开关、重启接待，保证「小爱同学」照常
+    if [ -e /tmp/butler-asr-only ]; then
+        rm -f /tmp/butler-asr-only
+        /etc/init.d/mico_aivs_lab restart >/dev/null 2>&1
+    fi
     return 0
 }
 

@@ -51,6 +51,16 @@ pub fn parse_instruction(line: &str) -> Option<Recognize> {
     })
 }
 
+/// Dialog.Finish：接待把这一轮对话收尾完了，返回 dialog_id。
+pub fn parse_dialog_finish(line: &str) -> Option<String> {
+    let v: Value = serde_json::from_str(line.trim()).ok()?;
+    let header = v.get("header")?;
+    if header.get("namespace")?.as_str()? != "Dialog" || header.get("name")?.as_str()? != "Finish" {
+        return None;
+    }
+    Some(header.get("dialog_id")?.as_str()?.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,5 +103,15 @@ mod tests {
         let r = parse_instruction(l).unwrap();
         assert!(r.is_final);
         assert_eq!(r.text, "");
+    }
+
+    #[test]
+    fn dialog_finish_lines() {
+        // 格式同 2026-10-08 只识别模式下 OH2P 的真实行（编号是假的）
+        let line = r#"{"header":{"dialog_id":"0123456789abcdef0123456789abcdef","id":"fedcba9876543210fedcba98765432100000000000000000","name":"Finish","namespace":"Dialog"},"payload":{}}"#;
+        assert_eq!(parse_dialog_finish(line), Some("0123456789abcdef0123456789abcdef".into()));
+        assert_eq!(parse_dialog_finish(FINAL), None);
+        assert_eq!(parse_instruction(line), None);
+        assert_eq!(parse_dialog_finish("{not json"), None);
     }
 }
