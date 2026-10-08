@@ -50,6 +50,12 @@ async function route(req: IncomingMessage, res: ServerResponse, deps: WebDeps): 
   if (method === "GET" && (path === "/" || path === "/index.html")) {
     return file(res, join(ROOT, "index.html"), "text/html; charset=utf-8");
   }
+  if (method === "GET" && (path === "/live" || path === "/live.html")) {
+    return file(res, join(ROOT, "live.html"), "text/html; charset=utf-8");
+  }
+  if (method === "GET" && path === "/api/live") {
+    return json(res, 200, butler.live());
+  }
   if (method === "GET" && path === "/api/config") {
     return json(res, 200, deps.getConfig());
   }
@@ -95,7 +101,7 @@ async function route(req: IncomingMessage, res: ServerResponse, deps: WebDeps): 
   json(res, 404, { error: "not found" });
 }
 
-/** 一条 SSE 推三种东西：log / state / history。 */
+/** 一条 SSE 推四种东西：log / state / history / live（演示页用的每轮实时过程）。 */
 function stream(req: IncomingMessage, res: ServerResponse, deps: WebDeps): void {
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
@@ -105,12 +111,15 @@ function stream(req: IncomingMessage, res: ServerResponse, deps: WebDeps): void 
   const send = (event: string, data: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   send("state", snapshot(deps));
   for (const e of logs()) send("log", e);
+  for (const r of deps.butler.live()) send("live", r);
 
   const pushState = () => send("state", snapshot(deps));
   const pushHistory = (e: unknown) => send("history", e);
+  const pushLive = (r: unknown) => send("live", r);
   const offLog = onLog((e) => send("log", e));
   deps.butler.on("state", pushState);
   deps.butler.on("history", pushHistory);
+  deps.butler.on("live", pushLive);
   deps.speaker.on("state", pushState);
   const keepalive = setInterval(() => res.write(": ping\n\n"), 25_000);
 
@@ -119,6 +128,7 @@ function stream(req: IncomingMessage, res: ServerResponse, deps: WebDeps): void 
     offLog();
     deps.butler.off("state", pushState);
     deps.butler.off("history", pushHistory);
+    deps.butler.off("live", pushLive);
     deps.speaker.off("state", pushState);
   });
 }

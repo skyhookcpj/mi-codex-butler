@@ -167,3 +167,36 @@ test("session and history survive a restart", async () => {
   assert.equal(again.butler.state().session.id, "s1");
   assert.equal(again.butler.history().length, 1);
 });
+
+test("live rounds track each step and the reply", async () => {
+  const { butler, clock } = setup([
+    async (job) => {
+      job.onStep?.({ type: "command", id: "c1", command: "mihome device control 1 2.1 false", status: "running" });
+      clock.t += 1200;
+      job.onStep?.({ type: "command", id: "c1", command: "mihome device control 1 2.1 false", status: "ok" });
+      job.onStep?.({ type: "note", text: "灯已经关了" });
+      return { sessionId: "s1", text: "客厅灯关了。" };
+    },
+  ]);
+  const seen: string[] = [];
+  butler.on("live", (r) => seen.push(r.steps.map((s: { status?: string }) => s.status ?? "note").join(",")));
+  await butler.handle("把客厅灯关了", "speaker");
+  const [round] = butler.live();
+  assert.equal(round.text, "把客厅灯关了");
+  assert.equal(round.steps.length, 2);
+  assert.deepEqual(
+    { status: round.steps[0].status, ms: round.steps[0].endedAt! - round.steps[0].at },
+    { status: "ok", ms: 1200 },
+  );
+  assert.equal(round.steps[1].type, "note");
+  assert.deepEqual(round.reply && { kind: round.reply.kind, text: round.reply.text }, { kind: "reply", text: "客厅灯关了。" });
+  assert.deepEqual(seen, ["", "running", "ok", "ok,note", "ok,note"]);
+});
+
+test("live keeps only the last few rounds", async () => {
+  const { butler } = setup(Array.from({ length: 7 }, (_, i) => ({ sessionId: "s", text: `第${i}句` })));
+  for (let i = 0; i < 7; i++) await butler.handle(`说${i}`, "web");
+  const live = butler.live();
+  assert.equal(live.length, 5);
+  assert.equal(live.at(-1)!.text, "说6");
+});

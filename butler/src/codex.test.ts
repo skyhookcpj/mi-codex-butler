@@ -41,6 +41,41 @@ test("stream parses real codex 0.159 output", () => {
   assert.equal(s.failure, null);
 });
 
+test("stream reports steps live: commands, then in-between notes, never the final reply", () => {
+  const steps: unknown[] = [];
+  const s = new CodexStream((step) => steps.push(step));
+  const lines = [
+    '{"type":"thread.started","thread_id":"t"}',
+    '{"type":"turn.started"}',
+    '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"我先看一下 skill"}}',
+    '{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc date","exit_code":null,"status":"in_progress"}}',
+    '{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc date","exit_code":0,"status":"completed"}}',
+    '{"type":"item.started","item":{"id":"item_2","type":"command_execution","command":"false","exit_code":null,"status":"in_progress"}}',
+    '{"type":"item.completed","item":{"id":"item_2","type":"command_execution","command":"false","exit_code":1,"status":"failed"}}',
+    '{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"现在零点半。"}}',
+    '{"type":"turn.completed"}',
+  ];
+  for (const l of lines) s.feed(l);
+  assert.deepEqual(steps, [
+    { type: "note", text: "我先看一下 skill" },
+    { type: "command", id: "item_1", command: "/bin/bash -lc date", status: "running" },
+    { type: "command", id: "item_1", command: "/bin/bash -lc date", status: "ok" },
+    { type: "command", id: "item_2", command: "false", status: "running" },
+    { type: "command", id: "item_2", command: "false", status: "fail" },
+  ]);
+  assert.equal(s.lastMessage, "现在零点半。");
+});
+
+test("stream survives a throwing step callback", () => {
+  const s = new CodexStream(() => {
+    throw new Error("boom");
+  });
+  s.feed('{"type":"item.started","item":{"id":"i","type":"command_execution","command":"ls"}}');
+  s.feed('{"type":"item.completed","item":{"type":"agent_message","text":"好了"}}');
+  assert.equal(s.feed('{"type":"turn.completed"}'), true);
+  assert.equal(s.lastMessage, "好了");
+});
+
 test("stream reports turn.failed and ignores junk", () => {
   const s = new CodexStream();
   assert.equal(s.feed("Reading prompt from stdin..."), false);

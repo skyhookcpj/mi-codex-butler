@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>管家现场</title>
+  <style>
+    :root {
+      --bg: #14110e;
+      --panel: #1e1a16;
+      --line: #3a332c;
+      --ink: #f3ece3;
+      --muted: #b7aa9c;
+      --faint: #7d7064;
+      --accent: #d9773a;
+      --ok: #7cb07a;
+      --bad: #d46a5c;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 18px/1.5 ui-sans-serif, system-ui, "PingFang SC", sans-serif;
+      overflow: hidden;
+    }
+    main {
+      height: 100%;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: clamp(16px, 3vw, 40px) clamp(16px, 4vw, 56px);
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: baseline; gap: 14px; }
+    .brand b { font-size: clamp(24px, 3vw, 34px); font-weight: 700; letter-spacing: .02em; }
+    .brand span { color: var(--muted); font-size: clamp(14px, 1.6vw, 18px); }
+    .meta { display: flex; align-items: center; gap: 20px; color: var(--muted); font-size: 16px; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--faint); margin-right: 8px; vertical-align: 1px; }
+    .dot.on { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+    #clock { font-family: var(--mono); color: var(--ink); font-size: 20px; }
+
+    #rounds { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 18px; }
+    .round {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: clamp(18px, 2.4vw, 30px) clamp(18px, 2.8vw, 36px);
+      transition: opacity .4s;
+    }
+    .round.old { opacity: .38; padding-top: 14px; padding-bottom: 14px; }
+    .round.old .steps, .round.old .thinking { display: none; }
+    .round.old .said { font-size: clamp(18px, 2vw, 22px); }
+    .round.old .reply .text { font-size: clamp(16px, 1.7vw, 19px); -webkit-line-clamp: 1; }
+
+    .who { font-size: 14px; letter-spacing: .12em; color: var(--muted); margin-bottom: 6px; }
+    .said { font-size: clamp(26px, 3.6vw, 44px); font-weight: 650; line-height: 1.3; }
+    .said::before { content: "「"; color: var(--accent); }
+    .said::after { content: "」"; color: var(--accent); }
+
+    .steps { list-style: none; margin: 20px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+    .step { display: grid; grid-template-columns: 30px 1fr auto; gap: 4px 12px; align-items: start; }
+    .step.fresh { animation: in .35s ease-out; }
+    @keyframes in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .icon { width: 26px; height: 26px; display: grid; place-items: center; font-size: 17px; margin-top: 2px; }
+    .icon.ok { color: var(--ok); }
+    .icon.fail { color: var(--bad); }
+    .icon.note { color: var(--accent); }
+    .spin {
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 2.5px solid var(--line); border-top-color: var(--accent);
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .label { font-size: clamp(18px, 2vw, 23px); font-weight: 600; }
+    .note-text { font-size: clamp(17px, 1.9vw, 21px); color: var(--muted); }
+    .cmd {
+      grid-column: 2 / 4;
+      font: 15px/1.45 var(--mono);
+      color: var(--faint);
+      white-space: pre-wrap;
+      word-break: break-all;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .dur { font: 15px var(--mono); color: var(--muted); padding-top: 4px; }
+
+    .thinking { margin-top: 18px; color: var(--muted); font-size: clamp(17px, 1.9vw, 21px); display: flex; align-items: center; gap: 12px; }
+    .thinking .spin { width: 16px; height: 16px; }
+
+    .reply { margin-top: 22px; padding-top: 18px; border-top: 1px dashed var(--line); }
+    .reply .text {
+      font-size: clamp(21px, 2.6vw, 30px); line-height: 1.5;
+      display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .reply.muted .text { color: var(--muted); }
+    .reply .total { margin-top: 8px; color: var(--faint); font: 15px var(--mono); }
+
+    @media (prefers-reduced-motion: reduce) { .step.fresh { animation: none; } .spin { animation-duration: 2.4s; } }
+
+    .empty { margin: auto; text-align: center; color: var(--muted); }
+    .empty b { display: block; font-size: clamp(30px, 4.5vw, 54px); color: var(--ink); margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="brand"><b>管家</b><span>小爱音箱 × Codex</span></div>
+      <div class="meta">
+        <span><i class="dot" id="spkDot"></i><span id="spk">音箱未连接</span></span>
+        <span id="clock">--:--:--</span>
+      </div>
+    </header>
+    <section id="rounds">
+      <div class="empty"><b>喊一声「你好管家」</b>说完一句话，这里会实时显示 Codex 每一步在做什么</div>
+    </section>
+  </main>
+
+  <script>
+    const SKILLS = { "go-to-work": "上班前", taxi: "叫车", "home-devices": "设备表" };
+    const SHOW = 3;
+    const $ = (id) => document.getElementById(id);
+    let rounds = [];
+    let skew = 0; // 服务器时钟 - 本机时钟
+    const seen = new Set(); // 已经出现过的步骤，重绘时不再播入场动画
+
+    function esc(s) {
+      return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    }
+
+    /** 去掉 Codex 套的 /bin/bash -lc '…' */
+    function unwrap(cmd) {
+      const m = cmd.match(/^\/bin\/(?:ba)?sh -lc (['"])([\s\S]*)\1$/);
+      if (!m) return cmd;
+      return m[1] === "'" ? m[2].replace(/'\\''/g, "'") : m[2].replace(/\\(["\\$`])/g, "$1");
+    }
+
+    function skillName(n) {
+      return SKILLS[n] ? `${SKILLS[n]}（${n}）` : n;
+    }
+
+    /** 给观众看的一句话 */
+    function describe(c) {
+      let m;
+      if ((m = c.match(/\.codex\/skills\/([\w-]+)\/SKILL\.md/)) && /^\s*(cat|sed|head|less|nl)\b/.test(c)) return `读 skill：${skillName(m[1])}`;
+      if ((m = c.match(/\.codex\/skills\/([\w-]+)\/[\w.-]+\.py(?:\s+(\w+))?/))) return `运行 ${skillName(m[1])} 脚本${m[2] ? " · " + m[2] : ""}`;
+      if (/AGENTS\.md/.test(c)) return "读工作区规则";
+      if (/^\s*mihome device control\b/.test(c)) return "控制设备";
+      if (/^\s*mihome device props\b/.test(c)) return "读设备状态";
+      if (/^\s*mihome device action\b/.test(c)) return "触发设备动作";
+      if (/^\s*mihome device spec\b/.test(c)) return "查设备能力";
+      if (/^\s*mihome\b/.test(c)) return "调用米家";
+      if (/^\s*lark-cli\b/.test(c)) return "查飞书";
+      if (/^\s*(date|cal)\b/.test(c)) return "看时间";
+      return "执行命令";
+    }
+
+    function secs(ms) {
+      return (Math.max(0, ms) / 1000).toFixed(1) + " 秒";
+    }
+
+    function stepHtml(r, s) {
+      const key = r.id + "/" + s.id;
+      const cls = seen.has(key) ? "step" : "step fresh";
+      seen.add(key);
+      if (s.type === "note") {
+        return `<li class="${cls}"><div class="icon note">💬</div><div class="note-text">${esc(s.text)}</div><div></div></li>`;
+      }
+      const cmd = unwrap(s.text);
+      const icon = s.status === "running" ? '<div class="spin"></div>' : s.status === "ok" ? "✓" : "✗";
+      const end = s.endedAt ?? Date.now() + skew;
+      return `<li class="${cls}"><div class="icon ${s.status}">${icon}</div>` +
+        `<div class="label">${esc(describe(cmd))}</div>` +
+        `<div class="dur" data-at="${s.at}" ${s.endedAt ? "" : "data-live"}>${secs(end - s.at)}</div>` +
+        `<div class="cmd">$ ${esc(cmd)}</div></li>`;
+    }
+
+    function roundHtml(r, old) {
+      const running = !r.reply && !r.steps.some((s) => s.status === "running");
+      let reply = "";
+      if (r.reply) {
+        const quiet = r.reply.kind !== "reply";
+        const text = r.reply.text || (r.reply.kind === "cancelled" ? "（已停止）" : "（不念）");
+        reply = `<div class="reply${quiet ? " muted" : ""}"><div class="who">管家</div><div class="text">${esc(text)}</div>` +
+          `<div class="total">共 ${secs(r.reply.at - r.startedAt)}</div></div>`;
+      }
+      return `<article class="round${old ? " old" : ""}">` +
+        `<div class="who">${r.source === "web" ? "模拟" : "你说"}</div><div class="said">${esc(r.text)}</div>` +
+        `<ul class="steps">${r.steps.map((s) => stepHtml(r, s)).join("")}</ul>` +
+        (running ? `<div class="thinking"><div class="spin"></div>Codex 思考中…</div>` : "") +
+        reply + `</article>`;
+    }
+
+    function render() {
+      const box = $("rounds");
+      if (!rounds.length) return;
+      const shown = rounds.slice(-SHOW).reverse();
+      box.innerHTML = shown.map((r, i) => roundHtml(r, i > 0)).join("");
+    }
+
+    function upsert(r) {
+      const i = rounds.findIndex((x) => x.id === r.id);
+      if (i >= 0) rounds[i] = r;
+      else rounds.push(r);
+      rounds = rounds.slice(-10);
+      render();
+    }
+
+    function tick() {
+      $("clock").textContent = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+      for (const el of document.querySelectorAll(".dur[data-live]")) {
+        el.textContent = secs(Date.now() + skew - Number(el.dataset.at));
+      }
+    }
+
+    function connect() {
+      const es = new EventSource("/api/stream");
+      es.addEventListener("state", (ev) => {
+        const s = JSON.parse(ev.data);
+        skew = s.now - Date.now();
+        const on = !!s.speaker?.connected;
+        $("spkDot").classList.toggle("on", on);
+        $("spk").textContent = on ? "音箱在线" : "音箱未连接";
+      });
+      es.addEventListener("live", (ev) => upsert(JSON.parse(ev.data)));
+      es.onerror = () => {
+        es.close();
+        setTimeout(connect, 2000);
+      };
+    }
+
+    setInterval(tick, 200);
+    tick();
+    connect();
+  </script>
+</body>
+</html>

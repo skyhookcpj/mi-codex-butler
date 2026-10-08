@@ -4,11 +4,17 @@ import type { CodexConfig } from "./config.ts";
 import { dataDir } from "./config.ts";
 import { log } from "./log.ts";
 
+/** Codex 这一轮正在做的事：跑命令、说中间的话。演示页实时显示。 */
+export type CodexStep =
+  | { type: "command"; id: string; command: string; status: "running" | "ok" | "fail" }
+  | { type: "note"; text: string };
+
 export type CodexRun = {
   /** 已有 session 就 resume，否则新建 */
   sessionId: string | null;
   prompt: string;
   cfg: CodexConfig;
+  onStep?: (step: CodexStep) => void;
 };
 
 export type CodexResult = { sessionId: string; text: string };
@@ -81,6 +87,10 @@ export class CodexStream {
   turnStarted = false;
   done = false;
   failure: string | null = null;
+  /** 最近一条 agent_message 后面又有动作，它就是中间的话；一直到结束都没有，它就是回复 */
+  private pendingNote: string | null = null;
+
+  constructor(private readonly onStep?: (step: CodexStep) => void) {}
 
   /** 返回值：这一行之后整轮是否已经结束（成功或失败） */
   feed(line: string): boolean {
@@ -99,14 +109,27 @@ export class CodexStream {
       case "turn.started":
         this.turnStarted = true;
         break;
+      case "item.started": {
+        const item = ev.item ?? {};
+        if (item.type === "command_execution" && typeof item.command === "string") {
+          this.flushNote();
+          this.step({ type: "command", id: String(item.id), command: item.command, status: "running" });
+        }
+        break;
+      }
       case "item.completed": {
         const item = ev.item ?? {};
         if (item.type === "agent_message" && typeof item.text === "string") {
+          this.flushNote();
           this.lastMessage = item.text;
+          this.pendingNote = item.text;
         } else if (item.type === "error" && typeof item.message === "string") {
           log("warn", `codex：${firstLine(item.message)}`);
         } else if (item.type === "command_execution" && typeof item.command === "string") {
           log("info", `codex $ ${item.command.slice(0, 300)}`);
+          this.flushNote();
+          const ok = item.exit_code === 0 || (item.exit_code == null && item.status === "completed");
+          this.step({ type: "command", id: String(item.id), command: item.command, status: ok ? "ok" : "fail" });
         }
         break;
       }
@@ -121,6 +144,19 @@ export class CodexStream {
         return true;
     }
     return false;
+  }
+
+  private flushNote(): void {
+    if (this.pendingNote?.trim()) this.step({ type: "note", text: this.pendingNote.trim() });
+    this.pendingNote = null;
+  }
+
+  private step(s: CodexStep): void {
+    try {
+      this.onStep?.(s);
+    } catch (err) {
+      log("warn", `演示页回调出错：${(err as Error)?.message ?? err}`);
+    }
   }
 }
 
@@ -156,7 +192,7 @@ export class SpawnCodexRunner implements CodexRunner {
     let exited!: () => void;
     this.lastExit = new Promise((r) => (exited = r));
 
-    const stream = new CodexStream();
+    const stream = new CodexStream(job.onStep);
     let stderr = "";
 
     return new Promise<CodexResult>((resolve, reject) => {
